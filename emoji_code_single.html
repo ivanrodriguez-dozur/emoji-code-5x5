@@ -464,6 +464,8 @@
   successAudio.preload = 'auto';
   failAudio.preload = 'auto';
   clickAudio.preload = 'auto';
+  // Source for the rewarded advertisement video. This will load the local ad.mp4 file
+  const adSrc = 'ad.mp4';
   function playSuccess() { try { successAudio.currentTime=0; successAudio.play(); } catch(e) {} }
   function playFail() { try { failAudio.currentTime=0; failAudio.play(); } catch(e) {} }
   function playClick() { try { clickAudio.currentTime=0; clickAudio.play(); } catch(e) {} }
@@ -476,15 +478,26 @@
       showToast('Debes esperar un poco antes de ver otro anuncio.');
       return;
     }
-    showModal('Anuncio', 'Se está reproduciendo un anuncio...', []);
-    // Simula 5 segundos de anuncio
-    setTimeout(() => {
+    // Create and play a rewarded video advertisement. When the video finishes
+    // playing, the user will receive credits. The cooldown check above
+    // prevents spamming the ad button.
+    const video = document.createElement('video');
+    video.src = adSrc;
+    video.controls = false;
+    video.autoplay = true;
+    video.style.width = '100%';
+    video.style.borderRadius = '12px';
+    video.onended = () => {
       hideModal();
       const newCredits = getCredits() + RECOMPENSA_ANUNCIO;
       setCredits(newCredits);
       localStorage.setItem('ec5x5_last_ad', String(Date.now()));
       showToast(`Ganaste ${RECOMPENSA_ANUNCIO} créditos`);
-    }, 5000);
+    };
+    // Insert the video into the existing modal and show it to the user.
+    modalMessage.innerHTML = '';
+    modalMessage.appendChild(video);
+    showModal('Publicidad', '', []);
   }
 
   // Inicializar
