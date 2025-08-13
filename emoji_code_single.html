@@ -353,7 +353,14 @@
     const credits = getCredits();
     if (credits < COSTO_POR_INTENTO) {
       showModal('Sin créditos', 'No tienes créditos suficientes. ¿Quieres ver un anuncio para obtener más?', [
-        { label: 'Ver anuncio', action: handleShowAd },
+        {
+          label: 'Ver anuncio',
+          action: () => {
+            // Cerrar el modal de sin créditos antes de reproducir el anuncio
+            hideModal();
+            handleShowAd();
+          }
+        },
         { label: 'Cancelar', action: hideModal, className:'secondary' }
       ]);
       return;
@@ -472,32 +479,60 @@
 
   // Ads simulation
   function handleShowAd() {
-    const last = parseInt(localStorage.getItem('ec5x5_last_ad')||'0');
-    const now = Date.now();
-    if (now - last < COOLDOWN_ANUNCIO_MS) {
+    const last = parseInt(localStorage.getItem('ec5x5_last_ad') || '0', 10);
+    if (Date.now() - last < COOLDOWN_ANUNCIO_MS) {
       showToast('Debes esperar un poco antes de ver otro anuncio.');
       return;
     }
-    // Create and play a rewarded video advertisement. When the video finishes
-    // playing, the user will receive credits. The cooldown check above
-    // prevents spamming the ad button.
+    // Abrimos el modal vacío antes de cargar el anuncio
+    showModal('Publicidad', '', []);
+    const body = document.getElementById('modalMessage') || modalMessage;
+    body.innerHTML = '';
     const video = document.createElement('video');
-    video.src = ad.mp4;
-    video.controls = false;
+    // Ruta del anuncio: se puede cambiar modificando adSrc
+    video.src = adSrc;
+    video.preload = 'auto';
+    video.controls = true;
     video.autoplay = true;
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
     video.style.width = '100%';
     video.style.borderRadius = '12px';
+    body.appendChild(video);
+    // Intentamos reproducir el vídeo; si falla, mostramos botón manual
+    const tryPlay = async () => {
+      try {
+        await video.play();
+      } catch (err) {
+        const btn = document.createElement('button');
+        btn.textContent = '▶ Reproducir anuncio';
+        btn.className = 'btn primary';
+        btn.style.marginTop = '12px';
+        btn.onclick = async () => {
+          // Tras interacción del usuario se puede desmutear
+          video.muted = false;
+          try { await video.play(); } catch {}
+          btn.remove();
+        };
+        body.appendChild(btn);
+      }
+    };
+    tryPlay();
+    // Al terminar el video, se otorga la recompensa y se cierra el modal
     video.onended = () => {
       hideModal();
-      const newCredits = getCredits() + RECOMPENSA_ANUNCIO;
-      setCredits(newCredits);
+      setCredits(getCredits() + RECOMPENSA_ANUNCIO);
       localStorage.setItem('ec5x5_last_ad', String(Date.now()));
       showToast(`Ganaste ${RECOMPENSA_ANUNCIO} créditos`);
     };
-    // Insert the video into the existing modal and show it to the user.
-    modalMessage.innerHTML = '';
-    modalMessage.appendChild(video);
-    showModal('Publicidad', '', []);
+    // Fallback: si el video no puede reproducirse
+    const fail = () => {
+      hideModal();
+      showToast('No se pudo reproducir el anuncio.');
+    };
+    video.onerror = fail;
+    video.onstalled = fail;
   }
 
   // Inicializar
