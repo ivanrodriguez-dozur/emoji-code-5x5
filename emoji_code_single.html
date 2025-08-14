@@ -115,6 +115,21 @@
     color: #0e1030;
     transform: translateY(-2px);
   }
+
+       /* Feedback colors after submitting a guess */
+       .board button.correct {
+         background: var(--ok);
+         color: #0e1030;
+       }
+       .board button.present {
+         background: #c9b458;
+         color: #0e1030;
+       }
+       .board button.wrong {
+         background: var(--surface-dark);
+         color: var(--muted);
+         opacity: 0.7;
+       }
   .controls {
     display: flex;
     justify-content: space-between;
@@ -204,6 +219,7 @@
   <div class="controls">
     <div class="status" id="status">Seleccionados 0/5</div>
     <div>
+      <button class="btn secondary" id="deleteBtn">Borrar</button>
       <button class="btn secondary" id="resetBtn">Reiniciar</button>
       <button class="btn primary" id="sendBtn">Enviar</button>
     </div>
@@ -228,6 +244,8 @@
   const COSTO_POR_INTENTO = 1;
   const RECOMPENSA_ANUNCIO = 3;
   const COOLDOWN_ANUNCIO_MS = 60000;
+  // Créditos otorgados al acertar un puzzle
+  const RECOMPENSA_VICTORIA = 3;
 
   const puzzles = [
     { id:"p1", categoria:"pelicula", pistaCorta:"Dirigida por Robert Zemeckis", pistaLarga:"Un hombre amable con chocolates narra su vida desde una banca de parque", tablero25:["🍫","🏃‍♂️","🎣","🧠","🌧️","🚌","🇺🇸","🎓","🍤","📬","🧢","🪖","💌","🦐","🏈","🪟","🕰️","🧦","🚢","🌳","🪑","🏞️","👟","❤️","📜"], codigo5:["🍫","🚌","🪖","🏈","👟"], hash:"c9b3079c90e67f00d02751969cd5a5c476446ae0e27022f08d1b35c01b806b19" },
@@ -257,6 +275,7 @@
   const statusEl = document.getElementById('status');
   const resetBtn = document.getElementById('resetBtn');
   const sendBtn = document.getElementById('sendBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
   const toastEl = document.getElementById('toast');
   const modalBackdrop = document.getElementById('modalBackdrop');
   const modalTitle = document.getElementById('modalTitle');
@@ -340,6 +359,20 @@
     statusEl.textContent = `Seleccionados 0/${currentPuzzle.codigo5.length}`;
   }
 
+  // Elimina el último emoji seleccionado sin reiniciar toda la selección
+  function deleteLastSelection() {
+    if (selection.length === 0) return;
+    // Remove last emoji from selection array
+    selection.pop();
+    // Find the last button marked as selected and remove the class
+    const selectedButtons = boardEl.querySelectorAll('button.selected');
+    const lastBtn = selectedButtons[selectedButtons.length - 1];
+    if (lastBtn) lastBtn.classList.remove('selected');
+    // Update status text
+    statusEl.textContent = `Seleccionados ${selection.length}/${currentPuzzle.codigo5.length}`;
+    navigator.vibrate?.(60);
+  }
+
   async function verifyHash(codeArr, expectedHash) {
     const str = codeArr.join('');
     const data = new TextEncoder().encode(str);
@@ -375,6 +408,8 @@
     const stats = getStats();
     stats.played += 1;
     if (isCorrect) {
+      // Resalta la selección como correcta antes de continuar
+      highlightSelection();
       // verify hash
       const okHash = await verifyHash(currentPuzzle.codigo5, currentPuzzle.hash);
       if (!okHash) {
@@ -383,6 +418,9 @@
       stats.won += 1;
       stats.streak += 1;
       setStats(stats);
+      // Otorga créditos adicionales al acertar
+      setCredits(getCredits() + RECOMPENSA_VICTORIA);
+      showToast(`¡Acertaste! +${RECOMPENSA_VICTORIA} créditos`);
       playSuccess();
       navigator.vibrate?.([40,40,80]);
       showConfetti();
@@ -394,6 +432,8 @@
         { label:'Siguiente puzzle', action: () => { hideModal(); renderPuzzle(pickPuzzle()); } }
       ]);
     } else {
+      // Resalta la selección indicando cuáles emojis son correctos o incorrectos
+      highlightSelection();
       // fail
       stats.streak = 0;
       setStats(stats);
@@ -404,6 +444,24 @@
     }
     // reset selection anyway
     resetSelection();
+  }
+
+  // Resalta cada emoji seleccionado como correcto, presente o incorrecto en el código
+  function highlightSelection() {
+    const selectedButtons = boardEl.querySelectorAll('button.selected');
+    const target = currentPuzzle.codigo5;
+    selectedButtons.forEach((btn, idx) => {
+      const emoji = selection[idx];
+      // Quitar clases previas
+      btn.classList.remove('correct','present','wrong');
+      if (emoji === target[idx]) {
+        btn.classList.add('correct');
+      } else if (target.includes(emoji)) {
+        btn.classList.add('present');
+      } else {
+        btn.classList.add('wrong');
+      }
+    });
   }
 
   function showToast(msg) {
@@ -559,6 +617,7 @@
     });
     resetBtn.addEventListener('click', () => resetSelection());
     sendBtn.addEventListener('click', onSubmit);
+        deleteBtn.addEventListener('click', () => deleteLastSelection());
     // update credits on load
     renderCredits();
   }
